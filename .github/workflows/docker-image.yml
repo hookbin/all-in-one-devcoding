@@ -29,4 +29,4 @@ jobs:
         with:
           context: .  # Dockerfile 所在的目录
           push: true
-          tags: hookbin/code-server-nvm-nodejs:latest
+          tags: hookbin/all-in-one-devcoding:latest
