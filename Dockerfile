@@ -1,30 +1,16 @@
-# 使用官方的 linuxserver/code-server 基础镜像
-FROM linuxserver/code-server:latest
+FROM lscr.io/linuxserver/code-server:latest
 
-# Set the SHELL to bash with pipefail option
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# LinuxServer 镜像默认就是 root 执行构建，无需写 USER root
 
-# 安装 nvm 所需的依赖
-RUN apt-get update && apt-get install -y \
-    curl \
-    git \
-    build-essential \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-    
-# Create a script file sourced by both interactive and non-interactive bash shells
-ENV BASH_ENV=/config/.bash_env
-RUN touch "${BASH_ENV}"
-RUN echo '. "${BASH_ENV}"' >> ~/.bashrc
+# 安装 Node.js 和全局工具
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    npm install -g pnpm yarn pm2 nodemon
 
-# 加载 nvm 并安装 Node.js v20.11.1
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | PROFILE="${BASH_ENV}" bash
-RUN echo node > .nvmrc
-RUN nvm install 20.11.1
-RUN nvm use 20.11.1
-RUN nvm alias default 20.11.1
+# 清理缓存以减小镜像体积
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# 可选：验证 Node.js 和 npm 版本
-RUN node -v && npm -v
-
-EXPOSE 8443
+# 注意：这里不需要写 USER 1000。
+# LinuxServer 的启动脚本 (s6-overlay) 会在容器启动时，
+# 根据 docker-compose.yml 中的 PUID 和 PGID 自动为你配置安全的用户权限。
