@@ -27,3 +27,15 @@ RUN chown -R 1000:1000 /usr/lib/node_modules \
 # 5. 清理缓存以减小镜像体积
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# 创建一个存放离线插件的临时目录
+RUN mkdir -p /tmp/extensions
+
+# 使用 curl 下载 Codeium 的 .vsix 安装包
+RUN curl -L -o /tmp/extensions/codeium.vsix "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/Codeium/vsextensions/codeium/latest/vspackage"
+
+# 使用 code-server 命令行工具进行全局安装
+RUN /app/code-server/bin/code-server --install-extension /tmp/extensions/codeium.vsix
+
+# 清理临时文件
+RUN rm -rf /tmp/extensions
