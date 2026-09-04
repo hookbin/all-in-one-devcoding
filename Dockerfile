@@ -70,5 +70,5 @@ RUN chmod +x /etc/cont-init.d/99-start-services \
     && rm -rf /var/lib/apt/lists/*
 
 # 8. 声明映射和端口
-VOLUME ["/config", ""]
+VOLUME ["/config", "/config"]
 EXPOSE 80 8080 8081 3000
