@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y curl git vim nano
 
 # 2. 安装 Node.js 官方源并安装核心程序
 # 这里以 20.x 版本为例，满足当前主流 Node.js 生态的需求
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt-get install -y nodejs
 
 # 3. 全局安装前端常用构建与守护工具 (如 PM2)
