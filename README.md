@@ -1,723 +1,1185 @@
-# Synology Web Development Container
+# All-in-One DevCoding
 
-基于 `lscr.io/linuxserver/code-server:latest` 的单容器 NAS 开发环境。
+> Synology NAS 上的 All-in-One Web Development Container
 
-## 功能
+一个面向 Synology NAS 的单容器开发环境，将常用的 Web 开发运行时集中在一个 Docker 容器中。
 
-- code-server
-- Node.js 20
-- pnpm / yarn
-- PM2 / nodemon
-- MongoDB 7.0.5
-- mongo-express
-- Nginx
-- 本地纯 TOTP 登录
-- s6 service 管理
-- GitHub Actions Docker build + smoke test
+当前阶段专注于提供稳定、简单的 **Runtime Environment**：
 
-## 项目结构
+* Nginx
+* code-server
+* Node.js 20
+* pnpm
+* yarn
+* PM2
+* MongoDB 7
+* mongo-express
 
-```text
-.
-├── Dockerfile
-├── .dockerignore
-├── README.md
-├── docker
-│   ├── nginx
-│   │   └── nginx.conf
-│   ├── services
-│   │   ├── mongodb
-│   │   │   └── run
-│   │   ├── mongo-express
-│   │   │   └── run
-│   │   ├── node-app
-│   │   │   └── run
-│   │   ├── nginx
-│   │   │   └── run
-│   │   └── totp
-│   │       └── run
-│   ├── totp
-│   │   ├── package.json
-│   │   └── server.js
-│   └── www
-│       └── index.html
-└── .github
-    └── workflows
-        └── docker-test.yml
-```
+后续再基于当前 Runtime Environment 规划 **App Manager / Control Plane**。
 
-## 路由
+---
 
-容器内 Nginx 监听 `8000`。
+## 1. 项目定位
 
-| 路径 | 目标 | TOTP |
-|---|---|---|
-| `/` | `/config/www` | 否 |
-| `/app/*` | Node.js `127.0.0.1:3000` | 否 |
-| `/vscode/*` | code-server `127.0.0.1:8080` | 是 |
-| `/express/*` | mongo-express `127.0.0.1:8081` | 是 |
-| `/totp/*` | TOTP `127.0.0.1:4180` | 登录入口 |
-| `/health` | Nginx | 否 |
+本项目不是生产环境 Web Server，也不是完整的 PaaS。
 
-MongoDB 只监听：
+它的目标是：
+
+> 在 Synology NAS 上提供一个开箱即用的个人/小团队 Web 开发工作站。
+
+容器启动后，可以通过浏览器访问：
+
+* Web 开发环境
+* code-server
+* Node.js 应用
+* MongoDB
+* mongo-express
+
+整个开发环境集中在一个容器中，由 NAS 提供持久化存储。
+
+---
+
+## 2. 当前阶段目标
+
+当前版本只解决：
+
+> **Runtime Plane**
+
+也就是：
 
 ```text
-127.0.0.1:27017
+Node.js
+PM2
+MongoDB
+mongo-express
+Nginx
+code-server
 ```
 
-因此不需要，也不应该：
+暂时不解决：
 
 ```text
--p 27017:27017
+App Manager
+TOTP
+用户管理
+动态应用管理
+动态路由管理
+权限管理
+应用注册中心
 ```
 
-## 构建
+这些功能属于后续的 **Control Plane**。
 
-当前 MongoDB 二进制为 x86_64，因此构建：
+---
 
-```bash
-docker build --platform linux/amd64 -t synology-webdev:latest .
-```
+## 3. Architecture
 
-GitHub Actions 已固定：
-
-```yaml
-platforms: linux/amd64
-```
-
-ARM64 Synology 需要更换 MongoDB ARM64 方案。
-
-## 运行
-
-```bash
-docker run -d \
-  --name webdev \
-  --restart unless-stopped \
-  -p 8000:8000 \
-  -v /volume1/docker/webdev/config:/config \
-  synology-webdev:latest
-```
-
-然后：
+当前整体结构：
 
 ```text
-http://NAS-IP:8000/
+                         Synology NAS
+                              │
+                              │ HTTP :8000
+                              ▼
+                        ┌─────────────┐
+                        │    Nginx    │
+                        │ Entry Point │
+                        └──────┬──────┘
+                               │
+              ┌────────────────┼────────────────┐
+              │                │                │
+              ▼                ▼                ▼
+        ┌──────────┐    ┌──────────────┐   ┌───────────┐
+        │code-server│    │ Node.js App  │   │mongo-expr.│
+        │   :8080  │    │    :3000     │   │   :8081   │
+        └──────────┘    └───────┬──────┘   └─────┬─────┘
+                                │                │
+                                └───────┬────────┘
+                                        ▼
+                                  ┌───────────┐
+                                  │  MongoDB  │
+                                  │   :27017  │
+                                  └───────────┘
 ```
 
-如果使用 Synology Reverse Proxy，建议：
+### 服务关系
+
+| Service       | Internal Address  | External      |
+| ------------- | ----------------- | ------------- |
+| Nginx         | `0.0.0.0:8000`    | Yes           |
+| code-server   | `127.0.0.1:8080`  | Through Nginx |
+| Node.js       | `127.0.0.1:3000`  | Through Nginx |
+| mongo-express | `127.0.0.1:8081`  | Through Nginx |
+| MongoDB       | `127.0.0.1:27017` | No            |
+
+### 核心原则
+
+**只有 Nginx 对外提供 HTTP 服务。**
+
+MongoDB、Node.js、mongo-express、code-server 都属于容器内部服务。
+
+---
+
+## 4. Nginx
+
+Nginx 是当前 Runtime Environment 的唯一 HTTP Entry Point。
+
+默认监听：
 
 ```text
-HTTPS :443
-    ↓
-Synology Reverse Proxy
-    ↓
-container:8000
+0.0.0.0:8000
 ```
 
-外部访问：
+当前提供以下路由：
 
-```text
-https://NAS/
-```
+| URL         | Backend          | Description   |
+| ----------- | ---------------- | ------------- |
+| `/`         | `/config/www`    | 默认 Web 页面     |
+| `/app/`     | `127.0.0.1:3000` | Node.js 应用    |
+| `/vscode/`  | `127.0.0.1:8080` | code-server   |
+| `/express/` | `127.0.0.1:8081` | mongo-express |
+| `/health`   | Nginx            | Health Check  |
 
-## TOTP
+当前 Nginx 配置是 **Static Configuration**。
 
-第一次启动，如果不存在：
+不会在当前阶段实现动态路由管理。
 
-```text
-/config/totp/secret
-```
+---
 
-TOTP 服务会自动生成 Secret。
+## 5. code-server
 
-查看：
-
-```bash
-docker logs webdev
-```
-
-会看到：
-
-```text
-Generated TOTP secret at /config/totp/secret
-TOTP secret: ...
-```
-
-将 Secret 加入 Google Authenticator、Microsoft Authenticator、1Password、Bitwarden 等支持标准 TOTP 的应用。
-
-然后：
-
-```text
-https://NAS/vscode/
-```
-
-或者：
-
-```text
-https://NAS/express/
-```
-
-输入 6 位动态验证码。
-
-默认 Session 有效期为 8 小时。
-
-## Node.js App
-
-项目目录：
-
-```text
-/config/app
-```
-
-需要：
-
-```text
-/config/app/package.json
-```
-
-并且 package.json 建议存在：
-
-```json
-{
-  "scripts": {
-    "start": "node server.js"
-  }
-}
-```
-
-容器启动：
-
-1. 等待 MongoDB TCP 端口 ready；
-2. 如果没有 `node_modules`，执行 `pnpm install`；
-3. 使用 PM2 启动 `npm start`。
+code-server 提供浏览器版 VS Code 开发环境。
 
 访问：
-
-```text
-https://NAS/app/
-```
-
-例如：
-
-```text
-/app/api
-```
-
-会转发到：
-
-```text
-127.0.0.1:3000/api
-```
-
-如果没有 `package.json`，Node service 保持 idle，不影响其他服务。
-
-## code-server
-
-code-server 由 LinuxServer 基础镜像自己的 s6 服务管理。
-
-本 Dockerfile 不重复启动 code-server。
-
-外部：
 
 ```text
 /vscode/
 ```
 
-内部：
+内部服务：
 
 ```text
 127.0.0.1:8080
 ```
 
-TOTP 是外层认证。
-
-注意：LinuxServer code-server 自身可能仍有认证配置，因此可能形成：
+code-server 使用基础镜像：
 
 ```text
-TOTP
-  ↓
-code-server 自身认证
-  ↓
-IDE
+lscr.io/linuxserver/code-server
 ```
 
-如果希望完全取消 code-server 自身认证，需要额外配置 LinuxServer code-server 的认证方式。
+因此服务生命周期继续由 LinuxServer 镜像的 **s6** 体系负责。
 
-## mongo-express
+本项目不重复实现 code-server 的启动管理。
 
-mongo-express 不使用 Basic Auth：
+---
+
+## 6. Node.js
+
+当前 Node.js 版本：
 
 ```text
-ME_CONFIG_BASICAUTH_USERNAME
-ME_CONFIG_BASICAUTH_PASSWORD
+Node.js 20
 ```
 
-外部认证由 Nginx + TOTP 提供：
+同时提供：
 
 ```text
-Browser
-  ↓
-HTTPS
-  ↓
-Nginx
-  ↓
-TOTP
-  ↓
-mongo-express
+npm
+pnpm
+yarn
 ```
 
-## 启动关系
+用于开发 Node.js / JavaScript / TypeScript 项目。
 
-s6 同时管理多个 service，但依赖关系使用 readiness check：
+默认 Node.js 应用端口：
 
 ```text
+127.0.0.1:3000
+```
+
+Nginx：
+
+```text
+/app/
+```
+
+反向代理到：
+
+```text
+127.0.0.1:3000
+```
+
+当前阶段只支持一个默认 Node.js Runtime。
+
+多应用管理将在后续 App Manager 阶段实现。
+
+---
+
+## 7. PM2
+
+PM2 用于管理 Node.js 应用进程。
+
+当前安装：
+
+```text
+pm2
+```
+
+以及：
+
+```text
+nodemon
+```
+
+PM2 的作用是提供：
+
+* Node.js 进程管理
+* 自动重启
+* 开发环境进程管理
+* 日志管理
+* 应用生命周期基础能力
+
+当前阶段：
+
+> PM2 只是 Runtime Tool，不负责应用注册和应用管理 UI。
+
+后续 App Manager 可以在 PM2 之上构建 Control Plane。
+
+---
+
+## 8. MongoDB
+
+当前 MongoDB：
+
+```text
+7.0.5
+```
+
+MongoDB 是容器内部数据库服务。
+
+监听：
+
+```text
+127.0.0.1:27017
+```
+
+### 安全边界
+
+MongoDB 不应该直接暴露到 Docker Host：
+
+```text
+❌ -p 27017:27017
+```
+
+也不应该监听：
+
+```text
+0.0.0.0:27017
+```
+
+当前架构：
+
+```text
+Node.js
+   │
+   ▼
+127.0.0.1:27017
+   │
+   ▼
 MongoDB
-   │
-   ├── ready ──→ mongo-express
-   │
-   └── ready ──→ Node.js
-
-code-server ──→ LinuxServer s6 管理
-
-TOTP ────────→ 独立启动
-
-Nginx ───────→ 独立启动
 ```
 
-Nginx 不等待所有后端。
-
-因此：
+数据目录：
 
 ```text
-/              可以立即访问
-/app/          后端未 ready 时可能 502
-/vscode/       后端未 ready 时可能 502
-/express/      MongoDB/ME 未 ready 时可能 502
+/config/mongo_data
 ```
 
-## GitHub Actions
+---
 
-工作流：
+## 9. mongo-express
+
+mongo-express 提供 MongoDB Web 管理界面。
+
+内部监听：
 
 ```text
-.github/workflows/docker-test.yml
+127.0.0.1:8081
 ```
 
-每次 push / pull request 自动：
+通过 Nginx：
 
-1. Build Docker image
-2. 使用 `linux/amd64`
-3. 启动 container
-4. 检查 `/health`
-5. 检查 `/`
-6. 检查 TOTP login
-7. 检查 `/vscode/`
-8. 检查 `/express/`
-9. 检查 MongoDB
-10. 检查 TOTP service
-11. 执行 `nginx -t`
-12. 失败时输出 container logs
-13. 自动清理测试容器
+```text
+/express/
+```
 
-## 持久化目录
+访问。
 
-只需要持久化：
+当前阶段不加入 TOTP、App Manager 等额外认证逻辑。
+
+认证方案将在后续 Control Plane / Authentication 阶段统一设计。
+
+---
+
+## 10. 持久化
+
+整个容器使用：
 
 ```text
 /config
 ```
 
-主要数据：
+作为持久化根目录。
+
+当前目录结构：
 
 ```text
-/config/app
-/config/www
-/config/totp/secret
-/config/mongo_data
-/config/logs
-```
-
-不要把：
-
-```text
-/config/totp/secret
-```
-
-提交到 Git。
-
-## 安全建议
-
-### HTTPS
-
-生产环境建议：
-
-```text
-https://NAS/
-```
-
-不要直接把 TOTP 服务暴露给公网。
-
-### MongoDB
-
-不要：
-
-```bash
--p 27017:27017
-```
-
-### TOTP Secret
-
-Secret 相当于认证主密钥。
-
-如果泄露，应删除：
-
-```text
-/config/totp/secret
-```
-
-重启后生成新的 Secret。
-
-## Dockerfile 的设计原则
-
-Dockerfile 现在只负责：
-
-- 安装系统依赖
-- 安装 Node.js
-- 安装全局 CLI
-- 安装 MongoDB
-- COPY 配置
-- COPY s6 services
-- 设置权限
-- Nginx build-time validation
-- EXPOSE
-- HEALTHCHECK
-
-业务逻辑全部放在 `docker/`：
-
-```text
-docker/
+/config
+├── app/
+├── www/
+├── mongo_data/
 ├── nginx/
-├── services/
-├── totp/
-└── www/
+└── logs/
 ```
 
-因此以后修改：
+说明：
+
+### `/config/app`
+
+默认 Node.js 应用目录。
+
+### `/config/www`
+
+默认 Nginx Web 根目录。
+
+### `/config/mongo_data`
+
+MongoDB 数据目录。
+
+### `/config/nginx`
+
+Nginx 持久化配置目录。
+
+### `/config/logs`
+
+服务日志目录。
+
+---
+
+## 11. Docker Volume
+
+容器使用：
 
 ```text
-Nginx → docker/nginx/nginx.conf
-TOTP  → docker/totp/server.js
-Mongo → docker/services/mongodb/run
-Node  → docker/services/node-app/run
-ME    → docker/services/mongo-express/run
-首页  → docker/www/index.html
+/config
 ```
 
-不需要再修改 Dockerfile。
+作为主要持久化 Volume。
 
-
-## 持久化映射
-
-推荐不要只挂载一个 `/config`，而是把需要持久化的目录分别映射到 NAS。
-
-推荐：
+例如：
 
 ```bash
 docker run -d \
-  --name webdev \
-  --restart unless-stopped \
+  --name devcoding \
   -p 8000:8000 \
-  -v /volume1/docker/webdev/app:/config/app \
-  -v /volume1/docker/webdev/www:/config/www \
-  -v /volume1/docker/webdev/totp:/config/totp \
-  -v /volume1/docker/webdev/logs:/config/logs \
-  -v /volume1/docker/webdev/mongo_data:/config/mongo_data \
-  -v /volume1/docker/webdev/nginx:/config/nginx \
-  synology-webdev:latest
-```
-
-### Nginx 配置
-
-NAS：
-
-```text
-/volume1/docker/webdev/nginx/nginx.conf
-```
-
-容器：
-
-```text
-/config/nginx/nginx.conf
-```
-
-第一次启动时，如果外部目录没有 `nginx.conf`，容器会自动从镜像中的默认配置复制一份。
-
-以后直接编辑 NAS 上的：
-
-```text
-/volume1/docker/webdev/nginx/nginx.conf
-```
-
-然后重启容器：
-
-```bash
-docker restart webdev
-```
-
-即可。
-
-这样重新创建/升级 Docker image 时，Nginx 配置不会丢失。
-
-### MongoDB 数据
-
-NAS：
-
-```text
-/volume1/docker/webdev/mongo_data
-```
-
-容器：
-
-```text
-/config/mongo_data
-```
-
-MongoDB 数据库文件全部持久化到 NAS。
-
-删除容器不会删除 MongoDB 数据：
-
-```text
-docker rm -f webdev
-```
-
-重新创建并继续挂载：
-
-```text
-/volume1/docker/webdev/mongo_data
-```
-
-即可恢复。
-
-### 推荐完整目录
-
-```text
-/volume1/docker/webdev/
-├── app/
-├── www/
-├── totp/
-│   └── secret
-├── logs/
-├── mongo_data/
-└── nginx/
-    └── nginx.conf
+  -v /volume1/docker/devcoding:/config \
+  hookbin/all-in-one-devcoding
 ```
 
 其中：
 
 ```text
-app/         Node.js 项目
-www/         Nginx 静态网站
-totp/        TOTP Secret
-logs/        Nginx/MongoDB 等日志
-mongo_data/  MongoDB 数据库
-nginx/       Nginx 配置
+/volume1/docker/devcoding
 ```
 
-### 为什么 Nginx 配置不能直接只 COPY 到 `/config`
+是 Synology NAS 上的实际持久化目录。
 
-Dockerfile 中：
+---
 
-```dockerfile
-COPY docker/nginx/nginx.conf /config/nginx/nginx.conf
-```
+## 12. Nginx Configuration
 
-如果运行时：
-
-```bash
--v /volume1/docker/webdev/nginx:/config/nginx
-```
-
-bind mount 会覆盖镜像里的 `/config/nginx`。
-
-因此本项目采用：
+镜像内提供默认 Nginx 配置：
 
 ```text
-镜像默认配置
-    ↓
 /opt/default-nginx.conf
-    ↓
-第一次启动
-    ↓
-/config/nginx/nginx.conf
-    ↓
-NAS 持久化
 ```
 
-这是为了同时满足：
+持久化配置目录：
 
-- Docker image 自带默认配置；
-- NAS 可以修改 Nginx 配置；
-- 重建 image 不覆盖用户配置；
-- 容器删除后配置仍然存在。
-
-### Docker Volume 声明
-
-Dockerfile 中声明：
-
-```dockerfile
-VOLUME [
-  "/config/app",
-  "/config/www",
-  "/config/totp",
-  "/config/logs",
-  "/config/mongo_data",
-  "/config/nginx"
-]
+```text
+/config/nginx
 ```
 
-如果使用 Synology Container Manager，分别把上述容器目录绑定到 NAS 对应目录即可。
+这样可以避免 Docker bind mount：
 
-## 日志持久化
+```text
+/config/nginx
+```
 
-所有自定义服务日志统一放到：
+之后导致镜像中的默认配置完全消失。
+
+当前阶段 Nginx 配置保持静态。
+
+未来 App Manager 可以扩展：
+
+```text
+/config/nginx/
+├── nginx.conf
+└── routes/
+    ├── app-foo.conf
+    ├── app-bar.conf
+    └── ...
+```
+
+但这属于下一阶段设计。
+
+---
+
+## 13. Logs
+
+日志统一放在：
 
 ```text
 /config/logs
 ```
 
-并通过 NAS 映射持久化：
+建议结构：
 
 ```text
-/volume1/docker/webdev/logs
-        ↓
 /config/logs
-```
-
-目录结构：
-
-```text
-logs/
 ├── nginx/
-│   ├── access.log
-│   └── error.log
 ├── mongodb/
-│   └── mongod.log
 ├── mongo-express/
-│   └── mongo-express.log
 ├── node-app/
-│   ├── out.log
-│   └── error.log
 ├── pm2/
-│   └── PM2 runtime files
-├── totp/
-│   └── totp.log
 └── code-server/
 ```
 
-### Nginx
+当前阶段主要保证日志可以持久化。
+
+日志轮转策略可以后续独立完善。
+
+---
+
+## 14. s6 Service Management
+
+容器使用 LinuxServer 基础镜像提供的 s6 服务体系。
+
+服务管理原则：
 
 ```text
-/config/logs/nginx/access.log
-/config/logs/nginx/error.log
+Docker
+  │
+  ▼
+LinuxServer Base Image
+  │
+  ▼
+s6
+  │
+  ├── code-server
+  ├── nginx
+  ├── mongodb
+  ├── mongo-express
+  └── node-app / PM2
 ```
 
-Nginx 配置直接写入上述持久化目录。
+Dockerfile 本身不负责直接启动这些服务。
 
-### MongoDB
+不要在 Dockerfile 中使用：
 
-```text
-/config/logs/mongodb/mongod.log
+```dockerfile
+CMD nginx ...
 ```
 
-MongoDB 数据本身仍然独立保存于：
+或者：
 
-```text
-/config/mongo_data
+```dockerfile
+CMD mongod ...
 ```
 
-不要把 MongoDB 数据和日志混在同一个目录。
+来代替 s6。
 
-### mongo-express
+---
+
+## 15. Service Dependencies
+
+当前服务依赖关系：
 
 ```text
-/config/logs/mongo-express/mongo-express.log
+MongoDB
+   │
+   ├── mongo-express
+   │
+   └── Node.js App
 ```
 
-mongo-express 的 stdout/stderr 会写入这个文件。
-
-### Node.js / PM2
-
-Node.js 应用：
+Nginx：
 
 ```text
-/config/logs/node-app/out.log
-/config/logs/node-app/error.log
+Nginx
+  │
+  ├── code-server
+  ├── Node.js
+  └── mongo-express
 ```
 
-PM2 自身运行目录：
+Nginx 本身不需要等待所有后端服务完全启动。
+
+因此容器刚启动时，某些服务仍在初始化可能出现：
 
 ```text
-/config/logs/pm2
+502 Bad Gateway
 ```
 
-因此不会把 PM2 日志散落到 `abc` 用户的 home 目录。
+这是允许的启动状态。
 
-### TOTP
+待后端服务完成启动后，Nginx 即可正常代理。
+
+---
+
+## 16. Health Check
+
+当前健康检查以 Nginx 为入口：
 
 ```text
-/config/logs/totp/totp.log
+GET /health
 ```
 
-TOTP Secret 仍然单独保存：
+成功返回：
 
 ```text
-/config/totp/secret
+200 OK
+```
+
+例如：
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+预期：
+
+```text
+OK
+```
+
+Health Check 的目标是确认：
+
+> 容器的 HTTP Entry Point 正常工作。
+
+它不等价于所有后端服务都已经完全 Ready。
+
+---
+
+## 17. Dockerfile
+
+当前 Dockerfile 的职责非常明确：
+
+### 负责
+
+```text
+安装系统依赖
+安装 Nginx
+安装 Node.js
+安装 pnpm
+安装 yarn
+安装 PM2
+安装 nodemon
+安装 mongo-express
+安装 MongoDB
+准备 /config
+复制默认 Nginx 配置
+提供 Health Check
+```
+
+### 不负责
+
+```text
+❌ App Manager
+❌ TOTP
+❌ 用户认证
+❌ 动态路由
+❌ 应用注册
+❌ 应用创建
+❌ 应用删除
+❌ 应用启停 UI
+❌ Secret 管理
+```
+
+这样 Dockerfile 可以保持稳定。
+
+---
+
+## 18. Build
+
+构建：
+
+```bash
+docker build -t all-in-one-devcoding .
+```
+
+或者：
+
+```bash
+docker build \
+  -t all-in-one-devcoding:latest \
+  .
+```
+
+---
+
+## 19. Run
+
+基本运行方式：
+
+```bash
+docker run -d \
+  --name devcoding \
+  -p 8000:8000 \
+  -v /volume1/docker/devcoding:/config \
+  all-in-one-devcoding:latest
+```
+
+查看容器：
+
+```bash
+docker ps
+```
+
+查看日志：
+
+```bash
+docker logs devcoding
+```
+
+进入容器：
+
+```bash
+docker exec -it devcoding bash
+```
+
+---
+
+## 20. Access
+
+容器启动以后：
+
+### Main Web
+
+```text
+http://NAS-IP:8000/
 ```
 
 ### code-server
 
-`code-server` 由 LinuxServer 基础镜像自己的 s6 service 管理。该 service 的具体日志行为由基础镜像控制，因此本项目不会强行覆盖其原生 service。
+```text
+http://NAS-IP:8000/vscode/
+```
 
-`/config/logs/code-server` 作为预留目录；如果后续需要将 code-server 日志完全文件化，可以针对 LinuxServer 当前版本的 service 定制。
-
-### 日志和 Docker logs
-
-本项目的服务日志优先写入：
+### mongo-express
 
 ```text
-/config/logs
+http://NAS-IP:8000/express/
 ```
 
-所以 NAS 上可以长期保留日志。
-
-但 s6/service 的启动信息仍可能出现在：
-
-```bash
-docker logs webdev
-```
-
-这是正常的，两者用途不同：
+### Node.js
 
 ```text
-/config/logs
-    → 应用运行日志、Nginx access/error、MongoDB log
-
-docker logs
-    → 容器/s6 生命周期和启动诊断信息
+http://NAS-IP:8000/app/
 ```
 
-### 日志轮转
-
-生产环境建议后续加入 logrotate 或基于应用自身的日志轮转策略。
-
-尤其需要关注：
+### Health
 
 ```text
-nginx/access.log
-mongo-express/mongo-express.log
-node-app/out.log
-node-app/error.log
-totp/totp.log
+http://NAS-IP:8000/health
 ```
 
-不要让开发容器长期无限增长日志文件。
+---
+
+## 21. Synology Reverse Proxy
+
+推荐通过 Synology Reverse Proxy 对外提供 HTTPS。
+
+整体结构：
+
+```text
+Internet / LAN
+      │
+      │ HTTPS
+      ▼
+Synology Reverse Proxy
+      │
+      │ HTTP
+      ▼
+127.0.0.1:8000
+      │
+      ▼
+     Nginx
+```
+
+例如：
+
+```text
+https://dev.example.com
+```
+
+反向代理到：
+
+```text
+http://127.0.0.1:8000
+```
+
+TLS 终止由 Synology 负责。
+
+---
+
+## 22. Security Boundary
+
+当前版本的安全边界：
+
+### Nginx
+
+唯一外部 HTTP Entry Point。
+
+### MongoDB
+
+只监听：
+
+```text
+127.0.0.1:27017
+```
+
+不对外暴露。
+
+### code-server
+
+只通过 Nginx 访问。
+
+### mongo-express
+
+只通过 Nginx 访问。
+
+### Node.js
+
+只通过 Nginx 访问。
+
+---
+
+## 23. Platform
+
+当前 MongoDB 安装方式依赖 MongoDB 官方 x86_64 Linux binary。
+
+因此当前主要目标平台：
+
+```text
+linux/amd64
+```
+
+即：
+
+```text
+Synology x86_64
+```
+
+ARM64 Synology 暂不作为当前版本目标。
+
+未来如果支持 ARM64，需要重新设计 MongoDB 安装方案。
+
+---
+
+# 24. Project Structure
+
+当前项目建议保持：
+
+```text
+all-in-one-devcoding/
+│
+├── Dockerfile
+├── README.md
+│
+├── docker/
+│   ├── nginx/
+│   │   └── nginx.conf
+│   │
+│   ├── services/
+│   │   ├── nginx/
+│   │   ├── mongodb/
+│   │   ├── mongo-express/
+│   │   └── node-app/
+│   │
+│   └── www/
+│       └── index.html
+│
+└── .github/
+    └── workflows/
+        └── docker.yml
+```
+
+具体目录可以随着实现继续调整，但原则是：
+
+> Dockerfile 负责构建环境，`docker/` 负责运行时配置和服务定义。
+
+---
+
+# 25. Development Workflow
+
+典型开发流程：
+
+```text
+1. 启动 Container
+       │
+       ▼
+2. 打开 code-server
+       │
+       ▼
+3. 创建 /config/app
+       │
+       ▼
+4. 开发 Node.js 项目
+       │
+       ▼
+5. 使用 pnpm / yarn 安装依赖
+       │
+       ▼
+6. PM2 / nodemon 启动应用
+       │
+       ▼
+7. Nginx /app/ 提供访问
+       │
+       ▼
+8. Node.js 连接 localhost MongoDB
+```
+
+---
+
+# 26. Current Scope
+
+当前版本明确包含：
+
+* [x] Docker development environment
+* [x] Nginx
+* [x] code-server
+* [x] Node.js 20
+* [x] npm
+* [x] pnpm
+* [x] yarn
+* [x] PM2
+* [x] nodemon
+* [x] MongoDB 7
+* [x] mongo-express
+* [x] Persistent `/config`
+* [x] Nginx reverse proxy
+* [x] Health Check
+* [x] s6 service management
+
+---
+
+# 27. Not in Current Scope
+
+以下功能暂时不实现：
+
+* [ ] App Manager
+* [ ] Control Plane
+* [ ] TOTP
+* [ ] Password Authentication
+* [ ] User Management
+* [ ] Application Registry
+* [ ] Dynamic Application Ports
+* [ ] Dynamic Nginx Routes
+* [ ] Application Create/Delete
+* [ ] Application Start/Stop UI
+* [ ] Application Resource Monitoring
+* [ ] Secret Management
+* [ ] Multi-user Permission System
+
+---
+
+# 28. Future: App Manager
+
+下一阶段将在当前 Runtime Environment 之上增加：
+
+```text
+                    Control Plane
+                         │
+                    App Manager
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+ Application         Nginx            TOTP/Auth
+ Management          Routes           Management
+        │                │                │
+        ▼                ▼                ▼
+       PM2            Nginx             Auth
+```
+
+App Manager 将成为整个系统的 **Control Plane**。
+
+它负责：
+
+```text
+Application
+    │
+    ├── create
+    ├── delete
+    ├── enable
+    ├── disable
+    ├── start
+    ├── stop
+    ├── restart
+    ├── port
+    └── route
+```
+
+并负责管理：
+
+```text
+/config/apps/
+```
+
+以及：
+
+```text
+/config/nginx/routes/
+```
+
+---
+
+# 29. Future Architecture
+
+最终架构计划：
+
+```text
+                         Synology NAS
+                              │
+                              ▼
+                         Reverse Proxy
+                              │
+                              ▼
+                         ┌─────────┐
+                         │  Nginx  │
+                         │ Gateway │
+                         └────┬────┘
+                              │
+             ┌────────────────┼─────────────────┐
+             │                │                 │
+             ▼                ▼                 ▼
+       App Manager       code-server       mongo-express
+       Control Plane        :8080              :8081
+             │
+             │
+             ├──────────────► PM2
+             │                  │
+             │          ┌───────┼───────┐
+             │          ▼       ▼       ▼
+             │        App A   App B   App C
+             │
+             ├──────────────► Nginx Routes
+             │
+             └──────────────► TOTP / Auth
+                                    │
+                                    ▼
+                               Authentication
+```
+
+---
+
+# 30. Design Principles
+
+## 30.1 Runtime 与 Control Plane 分离
+
+当前：
+
+```text
+Runtime Plane
+```
+
+负责运行服务。
+
+未来：
+
+```text
+Control Plane
+```
+
+负责管理服务。
+
+两者不应该混在 Dockerfile 中。
+
+---
+
+## 30.2 Nginx 是入口
+
+所有外部 HTTP 请求：
+
+```text
+Client
+  │
+  ▼
+Nginx
+  │
+  ├── code-server
+  ├── Node.js
+  └── mongo-express
+```
+
+---
+
+## 30.3 MongoDB 不对外暴露
+
+MongoDB 只提供容器内部服务：
+
+```text
+127.0.0.1:27017
+```
+
+---
+
+## 30.4 `/config` 是持久化边界
+
+容器可以删除和重新创建。
+
+只要：
+
+```text
+/config
+```
+
+仍然存在，用户数据就应该继续存在。
+
+```text
+Container
+   │
+   ├── delete
+   ├── recreate
+   └── update
+          │
+          ▼
+       /config
+          │
+          ▼
+       Persistent
+```
+
+---
+
+## 30.5 Dockerfile 保持简单
+
+Dockerfile 的目标：
+
+> Build Runtime Environment.
+
+而不是：
+
+> Build the entire application management platform.
+
+App Manager 应该在后续阶段独立设计。
+
+---
+
+# 31. Roadmap
+
+## Phase 1 — Runtime Environment
+
+当前阶段：
+
+```text
+[x] Nginx
+[x] code-server
+[x] Node.js
+[x] PM2
+[x] MongoDB
+[x] mongo-express
+[x] Persistent Storage
+[x] Basic Health Check
+```
+
+---
+
+## Phase 2 — App Manager
+
+计划：
+
+```text
+[ ] App Manager UI
+[ ] Application Registry
+[ ] Application Create
+[ ] Application Delete
+[ ] Application Enable / Disable
+[ ] PM2 Integration
+[ ] Dynamic Port Allocation
+[ ] Dynamic Nginx Routes
+[ ] Application Status
+```
+
+---
+
+## Phase 3 — Authentication
+
+计划：
+
+```text
+[ ] TOTP
+[ ] TOTP Secret Lifecycle
+[ ] Password Fallback
+[ ] Authentication Policy
+[ ] Login Session
+[ ] Credential Management
+```
+
+认证系统应该在 App Manager / Control Plane 架构明确以后再实现。
+
+---
+
+# 32. Final Architecture Goal
+
+最终希望形成：
+
+```text
+┌──────────────────────────────────────────────┐
+│              Synology DevCoding              │
+│                                              │
+│  ┌────────────────────────────────────────┐  │
+│  │              Control Plane             │  │
+│  │                                        │  │
+│  │             App Manager               │  │
+│  │                                        │  │
+│  │  Apps │ Routes │ Auth │ Configuration │  │
+│  └───────────────────┬────────────────────┘  │
+│                      │                       │
+│                      ▼                       │
+│  ┌────────────────────────────────────────┐  │
+│  │              Runtime Plane             │  │
+│  │                                        │  │
+│  │ Nginx │ code-server │ Node │ PM2       │  │
+│  │                                        │  │
+│  │ MongoDB │ mongo-express                │  │
+│  └────────────────────────────────────────┘  │
+│                      │                       │
+│                      ▼                       │
+│                /config                      │
+│                  Persistent                 │
+└──────────────────────────────────────────────┘
+```
+
+核心关系：
+
+| Component     | Responsibility                   |
+| ------------- | -------------------------------- |
+| Docker        | Runtime Environment              |
+| s6            | Service Lifecycle                |
+| Nginx         | HTTP Entry Point / Reverse Proxy |
+| code-server   | Web IDE                          |
+| Node.js       | Application Runtime              |
+| PM2           | Node.js Process Manager          |
+| MongoDB       | Database                         |
+| mongo-express | Database Web UI                  |
+| `/config`     | Persistent Data                  |
+| App Manager   | Future Control Plane             |
+
+---
+
+## License
+
+待项目正式发布时补充。

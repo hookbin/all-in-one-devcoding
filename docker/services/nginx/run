@@ -1,8 +1,0 @@
-#!/command/with-contenv bash
-set -e
-exec 2>&1
-
-mkdir -p /config/logs/nginx
-chown -R abc:abc /config/logs/nginx
-
-exec nginx -c /config/nginx/nginx.conf -g 'daemon off;'

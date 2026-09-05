@@ -9,73 +9,107 @@ ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive \
     NPM_CONFIG_PREFIX=/opt/npm-global \
     PATH=/opt/npm-global/bin:$PATH \
-    ME_CONFIG_MONGODB_URL=mongodb://127.0.0.1:27017/ \
-    ME_CONFIG_SITE_BASEURL=/express/ \
-    NODE_ENV=development \
-    APP_DIR=/config/app \
-    NGINX_DIR=/config/nginx \
-    TOTP_DIR=/config/totp \
-    TOTP_PORT=4180 \
-    PM2_HOME=/config/logs/pm2
+    PM2_HOME=/config/.pm2
+
+# --------------------------------------------------
+# Basic system tools + Nginx
+# --------------------------------------------------
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        ca-certificates curl git vim nano wget nginx procps netcat-openbsd && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    npm install -g pnpm yarn pm2 nodemon mongo-express otplib && \
-    rm -rf /var/lib/apt/lists/* /tmp/*
+        ca-certificates \
+        curl \
+        git \
+        wget \
+        nginx \
+        procps \
+        netcat-openbsd && \
+    rm -rf /var/lib/apt/lists/*
 
-# MongoDB 7.0.5 bundled binary; current image supports linux/amd64.
+# --------------------------------------------------
+# Node.js 20
+# --------------------------------------------------
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# --------------------------------------------------
+# Node.js development tools
+# --------------------------------------------------
+
+RUN npm install -g \
+        pnpm \
+        yarn \
+        pm2 \
+        nodemon \
+        mongo-express && \
+    npm cache clean --force
+
+# --------------------------------------------------
+# MongoDB
+#
+# Current target: linux/amd64
+# MongoDB is an internal service.
+# --------------------------------------------------
+
 RUN set -eux; \
-    case "$TARGETARCH" in \
-      amd64) MONGO_ARCH="x86_64" ;; \
-      *) echo "Unsupported TARGETARCH=$TARGETARCH. Build for linux/amd64."; exit 1 ;; \
-    esac; \
-    curl -fL "https://fastdl.mongodb.org/linux/mongodb-linux-${MONGO_ARCH}-${MONGO_OS}-${MONGO_VERSION}.tgz" \
-      -o /tmp/mongodb.tgz; \
+    if [ "$TARGETARCH" != "amd64" ]; then \
+        echo "MongoDB currently supports linux/amd64 only"; \
+        exit 1; \
+    fi; \
+    curl -fL \
+        "https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-${MONGO_OS}-${MONGO_VERSION}.tgz" \
+        -o /tmp/mongodb.tgz; \
     tar -xzf /tmp/mongodb.tgz -C /tmp; \
-    cp /tmp/mongodb-linux-${MONGO_ARCH}-${MONGO_OS}-${MONGO_VERSION}/bin/* /usr/local/bin/; \
-    rm -rf /tmp/mongodb.tgz /tmp/mongodb-linux-${MONGO_ARCH}-${MONGO_OS}-${MONGO_VERSION}
+    cp /tmp/mongodb-linux-x86_64-${MONGO_OS}-${MONGO_VERSION}/bin/* /usr/local/bin/; \
+    rm -rf /tmp/mongodb*
+
+# --------------------------------------------------
+# Basic directories
+# --------------------------------------------------
 
 RUN mkdir -p \
-        /opt/npm-global \
         /config/app \
         /config/www \
-        /config/totp \
-        /config/logs \
-        /config/logs/nginx \
-        /config/logs/mongodb \
-        /config/logs/mongo-express \
-        /config/logs/node-app \
-        /config/logs/totp \
-        /config/logs/code-server \
-        /config/logs/pm2 \
         /config/mongo_data \
-        /config/nginx \
-        /etc/services.d && \
-    chown -R abc:abc \
-        /opt/npm-global \
-        /config
+        /config/logs \
+        /config/nginx && \
+    chown -R abc:abc /config
 
-# Keep the image default outside /config because /config/nginx is a bind mount.
+# --------------------------------------------------
+# Nginx default configuration
+# --------------------------------------------------
+
 COPY docker/nginx/nginx.conf /opt/default-nginx.conf
-COPY docker/totp/server.js /opt/totp-server.js
-COPY docker/services/ /etc/services.d/
-COPY docker/www/ /opt/default-www/
 
-RUN chmod +x /etc/services.d/*/run && \
-    chown -R abc:abc \
-        /opt/npm-global \
-        /opt/default-www \
-        /config && \
-    nginx -t -c /opt/default-nginx.conf && \
-    apt-get clean
+RUN nginx -t -c /opt/default-nginx.conf
+
+# --------------------------------------------------
+# Exposed service
+#
+# Only Nginx is exposed externally.
+# Other services communicate through localhost.
+# --------------------------------------------------
 
 EXPOSE 8000
 
-# Persistent data/config directories.
-VOLUME ["/config/app", "/config/www", "/config/totp", "/config/logs", "/config/mongo_data", "/config/nginx"]
+# --------------------------------------------------
+# Persistent data
+# --------------------------------------------------
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1
+VOLUME [
+    "/config"
+]
+
+# --------------------------------------------------
+# Health check
+# --------------------------------------------------
+
+HEALTHCHECK \
+    --interval=30s \
+    --timeout=5s \
+    --start-period=30s \
+    --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/health || exit 1
