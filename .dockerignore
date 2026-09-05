@@ -1,0 +1,20 @@
+# Git metadata
+.git
+.github
+
+# Local persistent data
+config/
+data/
+logs/
+node_modules/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tar
+*.tgz
+*.zip

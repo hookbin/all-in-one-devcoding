@@ -1,0 +1,14 @@
+#!/command/with-contenv bash
+set -e
+exec 2>&1
+
+LOG_DIR=/config/logs/totp
+mkdir -p /config/totp "$LOG_DIR"
+chown -R abc:abc /config/totp "$LOG_DIR"
+
+echo "Starting TOTP service..."
+echo "TOTP log: $LOG_DIR/totp.log"
+
+exec s6-setuidgid abc sh -c \
+    'exec node /opt/totp-server.js >>"$0" 2>&1' \
+    "$LOG_DIR/totp.log"

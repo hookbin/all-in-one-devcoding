@@ -1,0 +1,42 @@
+#!/command/with-contenv bash
+set -e
+
+mkdir -p \
+    /config/app \
+    /config/www \
+    /config/totp \
+    /config/logs \
+    /config/logs/nginx \
+    /config/logs/mongodb \
+    /config/logs/mongo-express \
+    /config/logs/node-app \
+    /config/logs/totp \
+    /config/logs/code-server \
+    /config/logs/pm2 \
+    /config/mongo_data \
+    /config/nginx
+
+if [ ! -f /config/nginx/nginx.conf ]; then
+    cp /opt/default-nginx.conf /config/nginx/nginx.conf
+fi
+
+if [ ! -f /config/www/index.html ]; then
+    cp /opt/default-www/index.html /config/www/index.html
+fi
+
+chown -R abc:abc \
+    /config/app \
+    /config/www \
+    /config/totp \
+    /config/logs \
+    /config/logs/nginx \
+    /config/logs/mongodb \
+    /config/logs/mongo-express \
+    /config/logs/node-app \
+    /config/logs/totp \
+    /config/logs/code-server \
+    /config/logs/pm2 \
+    /config/mongo_data \
+    /config/nginx
+
+nginx -t -c /config/nginx/nginx.conf

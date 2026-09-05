@@ -1,0 +1,45 @@
+#!/command/with-contenv bash
+set -e
+exec 2>&1
+
+APP_DIR="${APP_DIR:-/config/app}"
+LOG_DIR=/config/logs/node-app
+PM2_HOME=/config/logs/pm2
+
+mkdir -p "$LOG_DIR" "$PM2_HOME"
+chown -R abc:abc "$LOG_DIR" "$PM2_HOME"
+
+if [ ! -f "$APP_DIR/package.json" ]; then
+    echo "No $APP_DIR/package.json; Node app service is idle."
+    exec tail -f /dev/null
+fi
+
+echo "Waiting for MongoDB..."
+
+until nc -z 127.0.0.1 27017 >/dev/null 2>&1; do
+    sleep 2
+done
+
+cd "$APP_DIR"
+
+if [ ! -d node_modules ]; then
+    echo "Installing Node.js dependencies..."
+    s6-setuidgid abc pnpm install
+fi
+
+if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.start ? 0 : 1)"; then
+    echo "Starting Node.js application with PM2..."
+    echo "Node app stdout: $LOG_DIR/out.log"
+    echo "Node app stderr: $LOG_DIR/error.log"
+
+    exec s6-setuidgid abc env PM2_HOME="$PM2_HOME" \
+        pm2-runtime start npm \
+        --name dev-app \
+        --output "$LOG_DIR/out.log" \
+        --error "$LOG_DIR/error.log" \
+        --time \
+        -- start
+fi
+
+echo "No package.json start script found; Node app service is idle."
+exec tail -f /dev/null

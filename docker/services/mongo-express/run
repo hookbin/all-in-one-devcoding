@@ -1,0 +1,27 @@
+#!/command/with-contenv bash
+set -e
+exec 2>&1
+
+LOG_DIR=/config/logs/mongo-express
+mkdir -p "$LOG_DIR"
+chown -R abc:abc "$LOG_DIR"
+
+echo "Waiting for MongoDB..."
+
+until nc -z 127.0.0.1 27017 >/dev/null 2>&1; do
+    sleep 2
+done
+
+echo "MongoDB TCP port is ready."
+echo "Starting mongo-express..."
+echo "mongo-express log: $LOG_DIR/mongo-express.log"
+
+export ME_CONFIG_MONGODB_URL="${ME_CONFIG_MONGODB_URL:-mongodb://127.0.0.1:27017/}"
+export ME_CONFIG_SITE_BASEURL="${ME_CONFIG_SITE_BASEURL:-/express/}"
+
+unset ME_CONFIG_BASICAUTH_USERNAME
+unset ME_CONFIG_BASICAUTH_PASSWORD
+
+exec s6-setuidgid abc sh -c \
+    'exec mongo-express >>"$0" 2>&1' \
+    "$LOG_DIR/mongo-express.log"
