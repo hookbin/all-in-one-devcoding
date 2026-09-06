@@ -92,9 +92,10 @@ RUN mkdir -p \
         /config/www \
         /config/mongo_data \
         /config/logs \
+        /config/logs/nginx \
         /config/nginx \
         /config/.pm2 && \
-    chown -R abc:abc /config
+    chown -R 1000:1000 /config
 
 # ============================================================
 # Default Nginx Configuration
