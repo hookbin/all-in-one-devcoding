@@ -11,12 +11,18 @@ USER root
 ARG MONGO_VERSION=7.0.5
 ARG MONGO_OS=ubuntu2204
 ARG TARGETARCH
+ARG PUID=1028
+ARG PGID=100
 
 # ============================================================
 # Environment
 # ============================================================
 
 ENV DEBIAN_FRONTEND=noninteractive \
+    PUID=1028 \
+    PGID=100 \
+    TZ=Asia/Shanghai \
+    EXTENSIONS_GALLERY={"serviceUrl":"https://marketplace.visualstudio.com/_apis/public/gallery","itemUrl":"https://marketplace.visualstudio.com/items","resourceUrlTemplate":"https://{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}"} \
     NPM_CONFIG_PREFIX=/opt/npm-global \
     PATH=/opt/npm-global/bin:$PATH \
     PM2_HOME=/config/.pm2
@@ -95,7 +101,7 @@ RUN mkdir -p \
         /config/logs/nginx \
         /config/nginx \
         /config/.pm2 && \
-    chown -R 1000:1000 /config
+    chown -R ${PUID}:${PGID} /config
 
 # ============================================================
 # Default Nginx Configuration
@@ -109,6 +115,12 @@ RUN mkdir -p \
 # ============================================================
 
 COPY docker/nginx/nginx.conf /opt/default-nginx.conf
+
+COPY docker/cont-init.d/10-runtime-directories /custom-cont-init.d/10-runtime-directories
+RUN chmod +x /custom-cont-init.d/10-runtime-directories
+
+COPY docker/services.d/nginx/run /custom-services.d/nginx/run
+RUN chmod +x /custom-services.d/nginx/run
 
 RUN nginx -t -c /opt/default-nginx.conf
 

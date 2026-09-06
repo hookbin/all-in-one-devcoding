@@ -1,0 +1,24 @@
+#!/usr/bin/with-contenv bash
+set -e
+
+mkdir -p \
+    /config/app \
+    /config/www \
+    /config/mongo_data \
+    /config/logs/nginx \
+    /config/nginx \
+    /config/.pm2
+
+if [ ! -f /config/nginx/nginx.conf ]; then
+    cp /opt/default-nginx.conf /config/nginx/nginx.conf
+fi
+
+chown -R "${PUID}:${PGID}" \
+    /config/app \
+    /config/www \
+    /config/mongo_data \
+    /config/logs \
+    /config/nginx \
+    /config/.pm2
+
+nginx -t -c /config/nginx/nginx.conf

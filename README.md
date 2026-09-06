@@ -399,7 +399,7 @@ docker run -d \
 
 ## 12. Nginx Configuration
 
-镜像内提供默认 Nginx 配置：
+镜像内提供默认 Nginx 配置模板：
 
 ```text
 /opt/default-nginx.conf
@@ -417,7 +417,15 @@ docker run -d \
 /config/nginx
 ```
 
-之后导致镜像中的默认配置完全消失。
+容器首次启动时，模板会复制为：
+
+```text
+/config/nginx/nginx.conf
+```
+
+以后可以直接编辑 Synology 映射目录中的 `nginx/nginx.conf`。如果该文件已经存在，容器启动时不会覆盖它。
+
+Nginx 运行时明确使用 `/config/nginx/nginx.conf`，修改该文件后重启容器即可生效。
 
 当前阶段 Nginx 配置保持静态。
 
