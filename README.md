@@ -7,7 +7,6 @@
 - Node.js 20、npm、pnpm、yarn、Express
 - PM2、nodemon
 - MongoDB 7.0.5
-- mongo-express
 
 当前镜像面向 `linux/amd64`。MongoDB 使用官方 x86_64 二进制文件，ARM64 暂不支持。
 
@@ -20,7 +19,6 @@ Nginx 是唯一的 HTTP 入口，监听容器内的 `8000` 端口：
 | `/` | `/config/www` 静态资源 |
 | `/vscode/` | code-server：`127.0.0.1:8443`，Nginx 会移除外部 `/vscode` 前缀 |
 | `/app/` | Node.js 应用：`127.0.0.1:3000` |
-| `/express/` | mongo-express：`127.0.0.1:8081` |
 | `/health` | Nginx 健康检查，返回 `200 OK` |
 
 MongoDB 只应监听容器内部的 `127.0.0.1:27017`，不要映射 `27017` 到宿主机。
@@ -133,7 +131,6 @@ docker run -d \
 ```
 
 MongoDB 会由 s6 自动启动，使用 `/config/mongo_data` 保存数据，并只监听容器内部的 `127.0.0.1:27017`。
-mongo-express 由 PM2 自动启动和管理，监听容器内部的 `127.0.0.1:8081`，并通过 `/express/` 访问。
 PM2 会由 s6 自动启动，并从 `/config/.pm2/dump.pm2` 恢复已保存的应用。
 首次启动时会自动生成默认应用：
 
@@ -187,7 +184,6 @@ pm2 ping
 ```text
 http://NAS-IP:8000/
 http://NAS-IP:8000/vscode/
-http://NAS-IP:8000/express/
 http://NAS-IP:8000/app/
 http://NAS-IP:8000/health
 ```

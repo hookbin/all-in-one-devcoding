@@ -22,8 +22,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NPM_CONFIG_PREFIX=/opt/npm-global \
     PATH=/opt/npm-global/bin:$PATH \
     NODE_PATH=/opt/npm-global/lib/node_modules \
-    PM2_HOME=/config/.pm2 \
-    PUBLIC_URL=/vscode
+    PM2_HOME=/config/.pm2
 
 # ============================================================
 # System Packages
@@ -57,9 +56,7 @@ RUN npm install -g \
         pnpm \
         yarn \
         pm2 \
-        nodemon \
-        express \
-        mongo-express && \
+        nodemon && \
     npm cache clean --force
 
 # ============================================================
@@ -146,7 +143,6 @@ RUN nginx -t -c /opt/default-nginx.conf
 # Internal services:
 #   code-server    127.0.0.1:8080
 #   Node.js        127.0.0.1:3000
-#   mongo-express  127.0.0.1:8081
 #   MongoDB        127.0.0.1:27017
 # ============================================================
 
