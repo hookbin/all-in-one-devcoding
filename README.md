@@ -121,6 +121,7 @@ PM2 会由 s6 自动启动，并从 `/config/.pm2/dump.pm2` 恢复已保存的�
 ```
 
 默认应用是 Express 项目，监听 `127.0.0.1:3000`，通过 `http://NAS-IP:8000/app/` 访问。已有文件不会被覆盖。
+PM2 会监视 `/config/app`，修改 Express 应用文件后自动重启应用；`node_modules` 和日志文件会被忽略。
 
 查看状态和日志：
 
