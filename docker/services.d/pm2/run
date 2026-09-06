@@ -1,0 +1,11 @@
+#!/usr/bin/with-contenv bash
+set -e
+
+if [ -f /config/.pm2/dump.pm2 ]; then
+    s6-setuidgid abc pm2 resurrect
+fi
+
+s6-setuidgid abc pm2 startOrRestart /config/app/ecosystem.config.js
+s6-setuidgid abc pm2 save
+
+exec s6-setuidgid abc pm2 logs --raw --lines 0

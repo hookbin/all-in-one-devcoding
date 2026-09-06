@@ -6,19 +6,29 @@ mkdir -p \
     /config/www \
     /config/mongo_data \
     /config/logs/nginx \
+    /config/logs/mongodb \
     /config/nginx \
     /config/.pm2
+
+if [ ! -f /config/app/server.js ]; then
+    cp /opt/default-node-app.js /config/app/server.js
+fi
+
+if [ ! -f /config/app/ecosystem.config.js ]; then
+    cp /opt/default-ecosystem.config.js /config/app/ecosystem.config.js
+fi
 
 if [ ! -f /config/nginx/nginx.conf ]; then
     cp /opt/default-nginx.conf /config/nginx/nginx.conf
 fi
 
-chown -R "${PUID}:${PGID}" \
+chown -R abc:abc \
     /config/app \
     /config/www \
     /config/mongo_data \
     /config/logs \
     /config/nginx \
-    /config/.pm2
+    /config/.pm2 \
+    /config/app
 
 nginx -t -c /config/nginx/nginx.conf

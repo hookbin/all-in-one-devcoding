@@ -1,0 +1,9 @@
+#!/usr/bin/with-contenv bash
+set -e
+
+exec s6-setuidgid abc mongod \
+    --dbpath /config/mongo_data \
+    --bind_ip 127.0.0.1 \
+    --port 27017 \
+    --logpath /config/logs/mongodb/mongod.log \
+    --logappend
