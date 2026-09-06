@@ -7,6 +7,7 @@ mkdir -p \
     /config/mongo_data \
     /config/logs/nginx \
     /config/logs/mongodb \
+    /config/logs/code-server \
     /config/nginx \
     /config/.pm2
 
@@ -22,6 +23,10 @@ if [ ! -f /config/app/ecosystem.config.js ]; then
     cp /opt/default-ecosystem.config.js /config/app/ecosystem.config.js
 fi
 
+if [ ! -f /config/www/index.html ]; then
+    cp /opt/default-index.html /config/www/index.html
+fi
+
 if [ ! -f /config/nginx/nginx.conf ]; then
     cp /opt/default-nginx.conf /config/nginx/nginx.conf
 fi
@@ -33,6 +38,7 @@ chown -R abc:abc \
     /config/logs \
     /config/nginx \
     /config/.pm2 \
-    /config/app
+    /config/app \
+    /config/www
 
 nginx -t -c /config/nginx/nginx.conf

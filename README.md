@@ -18,7 +18,7 @@ Nginx 是唯一的 HTTP 入口，监听容器内的 `8000` 端口：
 | URL | 目标 |
 | --- | --- |
 | `/` | `/config/www` 静态资源 |
-| `/vscode/` | code-server：`127.0.0.1:8080` |
+| `/vscode/` | code-server：`127.0.0.1:8443`，Nginx 会移除外部 `/vscode` 前缀 |
 | `/app/` | Node.js 应用：`127.0.0.1:3000` |
 | `/express/` | mongo-express：`127.0.0.1:8081` |
 | `/health` | Nginx 健康检查，返回 `200 OK` |
@@ -38,6 +38,7 @@ MongoDB 只应监听容器内部的 `127.0.0.1:27017`，不要映射 `27017` 到
 │   └── nginx.conf    Nginx 运行配置
 ├── logs/
 │   ├── nginx/        Nginx 日志
+│   ├── code-server/  code-server 日志
 │   └── mongodb/      MongoDB 日志
 └── .pm2/             PM2 数据
 ```
@@ -86,6 +87,28 @@ PM2_HOME=/config/.pm2
 NPM_CONFIG_PREFIX=/opt/npm-global
 ```
 
+可通过 `NGINX_ADMIN_TOKEN` 启用 Nginx 配置管理 API。该令牌不会写入镜像：
+
+```bash
+-e NGINX_ADMIN_TOKEN=请替换为随机长令牌
+```
+
+查询状态：
+
+```bash
+curl http://NAS-IP:8000/app/api/nginx/status
+```
+
+校验并重新加载 `/config/nginx/nginx.conf`：
+
+```bash
+curl -X POST \
+  -H "X-Nginx-Admin-Token: 请替换为随机长令牌" \
+  http://NAS-IP:8000/app/api/nginx/reload
+```
+
+配置校验失败时不会执行 reload。未设置令牌时，reload API 会返回 `401`。
+
 ## 构建镜像
 
 在项目根目录执行：
@@ -122,6 +145,12 @@ PM2 会由 s6 自动启动，并从 `/config/.pm2/dump.pm2` 恢复已保存的�
 
 默认应用是 Express 项目，监听 `127.0.0.1:3000`，通过 `http://NAS-IP:8000/app/` 访问。已有文件不会被覆盖。
 PM2 会监视 `/config/app`，修改 Express 应用文件后自动重启应用；`node_modules` 和日志文件会被忽略。
+
+code-server 通过 Nginx 的 `/vscode/` 子路径访问。该配置按照官方 subpath 方式转发，并保留末尾 `/`：
+
+```text
+http://NAS-IP:8000/vscode/
+```
 
 查看状态和日志：
 

@@ -22,7 +22,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NPM_CONFIG_PREFIX=/opt/npm-global \
     PATH=/opt/npm-global/bin:$PATH \
     NODE_PATH=/opt/npm-global/lib/node_modules \
-    PM2_HOME=/config/.pm2
+    PM2_HOME=/config/.pm2 \
+    PUBLIC_URL=/vscode
 
 # ============================================================
 # System Packages
@@ -117,12 +118,16 @@ COPY docker/nginx/nginx.conf /opt/default-nginx.conf
 COPY docker/app/server.js /opt/default-node-app.js
 COPY docker/app/package.json /opt/default-express-package.json
 COPY docker/pm2/ecosystem.config.js /opt/default-ecosystem.config.js
+COPY docker/www/index.html /opt/default-index.html
 
 COPY docker/cont-init.d/10-runtime-directories /custom-cont-init.d/10-runtime-directories
 RUN chmod +x /custom-cont-init.d/10-runtime-directories
 
 COPY docker/services.d/nginx/run /etc/services.d/nginx/run
 RUN chmod +x /etc/services.d/nginx/run
+
+COPY docker/services.d/svc-code-server/run /etc/services.d/svc-code-server/run
+RUN chmod +x /etc/services.d/svc-code-server/run
 
 COPY docker/services.d/mongodb/run /etc/services.d/mongodb/run
 RUN chmod +x /etc/services.d/mongodb/run

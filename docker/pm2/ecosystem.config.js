@@ -8,7 +8,8 @@ module.exports = {
       watch_delay: 1000,
       ignore_watch: ["node_modules", "logs", "*.log"],
       env: {
-        PORT: "3000"
+        PORT: "3000",
+        NGINX_ADMIN_TOKEN: process.env.NGINX_ADMIN_TOKEN || ""
       }
     },
     {
