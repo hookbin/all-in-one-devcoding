@@ -14,6 +14,10 @@ if [ ! -f /config/app/server.js ]; then
     cp /opt/default-node-app.js /config/app/server.js
 fi
 
+if [ ! -f /config/app/package.json ]; then
+    cp /opt/default-express-package.json /config/app/package.json
+fi
+
 if [ ! -f /config/app/ecosystem.config.js ]; then
     cp /opt/default-ecosystem.config.js /config/app/ecosystem.config.js
 fi

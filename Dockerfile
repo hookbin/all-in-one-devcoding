@@ -21,6 +21,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     EXTENSIONS_GALLERY={"serviceUrl":"https://marketplace.visualstudio.com/_apis/public/gallery","itemUrl":"https://marketplace.visualstudio.com/items","resourceUrlTemplate":"https://{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}"} \
     NPM_CONFIG_PREFIX=/opt/npm-global \
     PATH=/opt/npm-global/bin:$PATH \
+    NODE_PATH=/opt/npm-global/lib/node_modules \
     PM2_HOME=/config/.pm2
 
 # ============================================================
@@ -56,6 +57,7 @@ RUN npm install -g \
         yarn \
         pm2 \
         nodemon \
+        express \
         mongo-express && \
     npm cache clean --force
 
@@ -113,6 +115,7 @@ RUN mkdir -p \
 COPY docker/nginx/nginx.conf /opt/default-nginx.conf
 
 COPY docker/app/server.js /opt/default-node-app.js
+COPY docker/app/package.json /opt/default-express-package.json
 COPY docker/pm2/ecosystem.config.js /opt/default-ecosystem.config.js
 
 COPY docker/cont-init.d/10-runtime-directories /custom-cont-init.d/10-runtime-directories
