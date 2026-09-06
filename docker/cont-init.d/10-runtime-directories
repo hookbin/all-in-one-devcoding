@@ -19,6 +19,11 @@ if [ ! -f /config/app/package.json ]; then
     cp /opt/default-express-package.json /config/app/package.json
 fi
 
+mkdir -p /config/app/node_modules
+if [ ! -e /config/app/node_modules/express ]; then
+    ln -s /opt/npm-global/lib/node_modules/express /config/app/node_modules/express
+fi
+
 if [ ! -f /config/app/ecosystem.config.js ]; then
     cp /opt/default-ecosystem.config.js /config/app/ecosystem.config.js
 fi

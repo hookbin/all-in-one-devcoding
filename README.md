@@ -124,7 +124,7 @@ docker build \
 IMAGE=all-in-one-devcoding:latest bash tests/container-smoke.sh
 ```
 
-测试只验证页面路径和端口：`/`、`/health`、`/app/`、`/vscode/`，以及 `3000`、`8000`、`8443`、`27017`。GitHub Actions 会在推送镜像前自动执行该脚本。
+测试只通过 `curl` 验证页面路径 `/`、`/health`、`/app/`、`/vscode/` 返回 HTTP `200`。每次请求连接和通信超时均为 3 秒，GitHub Actions 会在推送镜像前自动执行该脚本。
 
 ## 运行容器
 

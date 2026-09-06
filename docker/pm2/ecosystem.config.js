@@ -9,7 +9,8 @@ module.exports = {
       ignore_watch: ["node_modules", "logs", "*.log"],
       env: {
         PORT: "3000",
-        NGINX_ADMIN_TOKEN: process.env.NGINX_ADMIN_TOKEN || ""
+        NGINX_ADMIN_TOKEN: process.env.NGINX_ADMIN_TOKEN || "",
+        NODE_PATH: "/opt/npm-global/lib/node_modules"
       }
     }
   ]
