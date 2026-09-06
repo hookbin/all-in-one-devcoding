@@ -116,6 +116,16 @@ docker build \
   -t all-in-one-devcoding:latest .
 ```
 
+## 自动化容器测试
+
+运行容器级 smoke test：
+
+```bash
+IMAGE=all-in-one-devcoding:latest bash tests/container-smoke.sh
+```
+
+测试只验证页面路径和端口：`/`、`/health`、`/app/`、`/vscode/`，以及 `3000`、`8000`、`8443`、`27017`。GitHub Actions 会在推送镜像前自动执行该脚本。
+
 ## 运行容器
 
 将 `/volume1/docker/devcoding` 替换为实际的 Synology 目录：

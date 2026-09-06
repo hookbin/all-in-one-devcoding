@@ -24,9 +24,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .  # Dockerfile 所在的目录
-          push: true
-          tags: hookbin/all-in-one-devcoding:latest
+      - name: Build Docker image
+        run: docker build -t all-in-one-devcoding:test .
+
+      - name: Run container smoke tests
+        run: bash tests/container-smoke.sh
+
+      - name: Push Docker image
+        run: |
+          docker tag all-in-one-devcoding:test hookbin/all-in-one-devcoding:latest
+          docker push hookbin/all-in-one-devcoding:latest
