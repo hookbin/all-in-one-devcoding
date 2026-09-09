@@ -48,4 +48,15 @@ for path in / /health /app/ /vscode/; do
   wait_for_http_200 "http://127.0.0.1:${PORT}${path}"
 done
 
-echo "Container HTTP 200 tests passed."
+for _ in $(seq 1 30); do
+  health_status="$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER" 2>/dev/null || true)"
+  if [ "$health_status" = "healthy" ]; then
+    echo "Container health check passed."
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "Container health check did not become healthy; status: ${health_status:-unknown}" >&2
+docker inspect "$CONTAINER" >&2 || true
+exit 1

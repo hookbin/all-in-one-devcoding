@@ -35,6 +35,7 @@ RUN apt-get update && \
         git \
         wget \
         nginx \
+        logrotate \
         procps \
         netcat-openbsd && \
     rm -rf /var/lib/apt/lists/*
@@ -53,6 +54,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 # ============================================================
 
 RUN npm install -g \
+    express \
         pnpm \
         yarn \
         pm2 \
@@ -131,6 +133,11 @@ RUN chmod +x /etc/services.d/mongodb/run
 
 COPY docker/services.d/pm2/run /etc/services.d/pm2/run
 RUN chmod +x /etc/services.d/pm2/run
+
+COPY docker/logrotate/devcoding /etc/logrotate.d/devcoding
+
+COPY docker/services.d/logrotate/run /etc/services.d/logrotate/run
+RUN chmod +x /etc/services.d/logrotate/run
 
 RUN nginx -t -c /opt/default-nginx.conf
 

@@ -32,12 +32,16 @@ MongoDB 只应监听容器内部的 `127.0.0.1:27017`，不要映射 `27017` 到
 ├── app/              Node.js 应用
 ├── www/              Nginx 静态网站根目录
 ├── mongo_data/       MongoDB 数据
+├── data/             code-server 用户数据
+├── extensions/       VS Code 扩展
+├── workspace/        code-server 工作区
 ├── nginx/
 │   └── nginx.conf    Nginx 运行配置
 ├── logs/
 │   ├── nginx/        Nginx 日志
 │   ├── code-server/  code-server 日志
-│   └── mongodb/      MongoDB 日志
+│   ├── mongodb/      MongoDB 日志
+│   └── logrotate.status
 └── .pm2/             PM2 数据
 ```
 
@@ -54,6 +58,8 @@ Nginx 配置模板位于镜像内：
 ```text
 /opt/default-nginx.conf
 ```
+
+容器内的 logrotate 服务每天执行一次日志轮转；Nginx、MongoDB、code-server 和 PM2 日志单文件超过 `50 MB` 时也会轮转。每类日志保留最近 `14` 个轮转文件，旧文件会压缩保存。轮转状态保存在 `/config/logs/logrotate.status`，不依赖群晖宿主机的定时任务。
 
 ## 权限和环境变量
 
@@ -126,9 +132,29 @@ IMAGE=all-in-one-devcoding:latest bash tests/container-smoke.sh
 
 测试只通过 `curl` 验证页面路径 `/`、`/health`、`/app/`、`/vscode/` 返回 HTTP `200`。每次请求连接和通信超时均为 3 秒，GitHub Actions 会在推送镜像前自动执行该脚本。
 
-## 运行容器
+## 在群晖 NAS 部署
+
+### 前置条件
+
+- 群晖为 x86_64/AMD64。当前镜像中的 MongoDB 官方二进制不支持 ARM64。
+- 已安装 Container Manager，并准备一个持久化目录，例如 `/volume1/docker/devcoding`。
+- NAS 的 `8000` 端口没有被其他服务占用。
+
+### 使用 Container Manager 或 SSH 创建容器
+
+1. 在 NAS 上创建目录 `/volume1/docker/devcoding`，并确保 Container Manager 对该目录有读写权限。
+2. 在 Container Manager 中创建容器，或通过 SSH 执行下面的 Docker 命令。
+3. 只配置端口映射 `8000:8000` 和目录映射 `/volume1/docker/devcoding:/config`，不要映射 MongoDB 的 `27017`。
+
+如需启用 Nginx 配置管理 API，在容器环境变量中设置一个随机长令牌：
+
+```text
+NGINX_ADMIN_TOKEN=替换为随机长令牌
+```
 
 将 `/volume1/docker/devcoding` 替换为实际的 Synology 目录：
+
+如果需要启用 Nginx 管理 API，将下面命令中的 `NGINX_ADMIN_TOKEN` 行取消注释并替换为随机长令牌。
 
 ```bash
 docker run -d \
@@ -139,6 +165,36 @@ docker run -d \
   -v /volume1/docker/devcoding:/config \
   all-in-one-devcoding:latest
 ```
+
+容器启动时，LinuxServer 的 s6 会自动启动 Nginx 服务，使用 `/config/nginx/nginx.conf`，监听容器内的 `8000` 端口。容器重启或 Nginx 进程退出后，s6 会负责重新拉起服务。
+
+首次启动后，容器会在 `/config` 下创建应用、网站、MongoDB 数据、日志和 PM2 数据目录。用以下命令确认容器内用户 UID/GID，再按实际数字修正 NAS 目录权限：
+
+```bash
+docker exec devcoding id abc
+chown -R UID:GID /volume1/docker/devcoding
+```
+
+验证部署：
+
+```bash
+curl -f http://NAS-IP:8000/health
+curl -f http://NAS-IP:8000/app/
+```
+
+浏览器访问：
+
+```text
+http://NAS-IP:8000/
+http://NAS-IP:8000/vscode/
+http://NAS-IP:8000/app/
+```
+
+### 安全注意事项
+
+- code-server 不启用内置密码认证。只能在可信内网中直接访问；公网访问必须经过 DSM 反向代理、HTTPS 和身份认证。
+- 不要添加 `27017:27017` 端口映射。MongoDB 已限制监听容器内的 `127.0.0.1`。
+- `NGINX_ADMIN_TOKEN` 仅用于 `/app/api/nginx/reload`，不要提交到 Git 或写入镜像。
 
 MongoDB 会由 s6 自动启动，使用 `/config/mongo_data` 保存数据，并只监听容器内部的 `127.0.0.1:27017`。
 PM2 会由 s6 自动启动，并从 `/config/.pm2/dump.pm2` 恢复已保存的应用。
@@ -164,6 +220,13 @@ http://NAS-IP:8000/vscode/
 ```bash
 docker ps
 docker logs -f devcoding
+```
+
+查看容器内日志轮转状态或立即执行一次轮转：
+
+```bash
+docker exec devcoding cat /config/logs/logrotate.status
+docker exec devcoding logrotate -s /config/logs/logrotate.status -f /etc/logrotate.d/devcoding
 ```
 
 进入容器：
@@ -217,6 +280,8 @@ http://NAS-IP:8000/health
 │   │   └── 10-runtime-directories
 │   └── services.d/
 │       ├── nginx/
+│       │   └── run
+│       ├── logrotate/
 │       │   └── run
 │       ├── mongodb/
 │       │   └── run

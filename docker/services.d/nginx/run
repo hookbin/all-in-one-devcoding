@@ -1,4 +1,8 @@
 #!/usr/bin/with-contenv bash
 set -e
 
+mkdir -p /config/logs/nginx
+touch /config/logs/nginx/nginx.pid
+chown abc:abc /config/logs/nginx/nginx.pid
+
 exec s6-setuidgid abc nginx -c /config/nginx/nginx.conf -g "daemon off;"

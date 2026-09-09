@@ -5,6 +5,9 @@ mkdir -p \
     /config/app \
     /config/www \
     /config/mongo_data \
+    /config/data \
+    /config/extensions \
+    /config/workspace \
     /config/logs/nginx \
     /config/logs/mongodb \
     /config/logs/code-server \
@@ -40,6 +43,9 @@ chown -R abc:abc \
     /config/app \
     /config/www \
     /config/mongo_data \
+    /config/data \
+    /config/extensions \
+    /config/workspace \
     /config/logs \
     /config/nginx \
     /config/.pm2 \

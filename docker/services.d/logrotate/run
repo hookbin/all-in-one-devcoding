@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv bash
+set -e
+
+while true; do
+    logrotate -s /config/logs/logrotate.status /etc/logrotate.d/devcoding
+    sleep 86400
+done

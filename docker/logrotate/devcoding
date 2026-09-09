@@ -1,0 +1,14 @@
+/config/logs/nginx/*.log
+/config/logs/mongodb/*.log
+/config/logs/code-server/*.log
+/config/.pm2/logs/*.log {
+    daily
+    maxsize 50M
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su abc abc
+}

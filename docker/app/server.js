@@ -40,7 +40,7 @@ app.post("/api/nginx/reload", async (request, response, next) => {
 
   try {
     const testResult = await execFileAsync("nginx", ["-t", "-c", nginxConfig]);
-    await execFileAsync("nginx", ["-s", "reload"]);
+    await execFileAsync("nginx", ["-c", nginxConfig, "-s", "reload"]);
 
     response.json({
       status: "reloaded",
