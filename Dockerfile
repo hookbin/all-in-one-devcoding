@@ -18,7 +18,7 @@ ARG TARGETARCH
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai \
-    EXTENSIONS_GALLERY={"serviceUrl":"https://marketplace.visualstudio.com/_apis/public/gallery","itemUrl":"https://marketplace.visualstudio.com/items","resourceUrlTemplate":"https://{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}"} \
+    EXTENSIONS_GALLERY='{"serviceUrl":"https://marketplace.visualstudio.com/_apis/public/gallery","itemUrl":"https://marketplace.visualstudio.com/items","resourceUrlTemplate":"https://{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}"}' \
     NPM_CONFIG_PREFIX=/opt/npm-global \
     PATH=/opt/npm-global/bin:$PATH \
     NODE_PATH=/opt/npm-global/lib/node_modules \
@@ -115,6 +115,7 @@ RUN mkdir -p \
 COPY docker/nginx/nginx.conf /opt/default-nginx.conf
 
 COPY docker/app/server.js /opt/default-node-app.js
+COPY docker/app/totp.js /opt/default-totp.js
 COPY docker/app/package.json /opt/default-express-package.json
 COPY docker/pm2/ecosystem.config.js /opt/default-ecosystem.config.js
 COPY docker/www/index.html /opt/default-index.html

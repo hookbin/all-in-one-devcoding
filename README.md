@@ -91,11 +91,13 @@ PM2_HOME=/config/.pm2
 NPM_CONFIG_PREFIX=/opt/npm-global
 ```
 
-可通过 `NGINX_ADMIN_TOKEN` 启用 Nginx 配置管理 API。该令牌不会写入镜像：
+Nginx 配置管理 API 使用 TOTP 动态验证码和签名 Cookie。先在本地生成静态 Base32 密钥：
 
 ```bash
--e NGINX_ADMIN_TOKEN=请替换为随机长令牌
+node -e "console.log(require('./docker/app/totp').generateSecret())"
 ```
+
+将输出保存到系统环境变量 `NGINX_TOTP_SECRET`，不要写入镜像或提交到 Git。同时把同一个密钥添加到支持 TOTP 的验证器；参数为 SHA-1、6 位、30 秒。
 
 查询状态：
 
@@ -103,15 +105,32 @@ NPM_CONFIG_PREFIX=/opt/npm-global
 curl http://NAS-IP:8000/app/api/nginx/status
 ```
 
-校验并重新加载 `/config/nginx/nginx.conf`：
+使用当前 TOTP 验证码换取有效期为 1 天的 Cookie：
 
 ```bash
-curl -X POST \
-  -H "X-Nginx-Admin-Token: 请替换为随机长令牌" \
+curl -c nginx-cookie.txt -X POST \
+  -H "X-Nginx-TOTP: 验证器当前显示的6位验证码" \
+  http://NAS-IP:8000/app/api/nginx/auth
+```
+
+使用 Cookie 校验并重新加载 `/config/nginx/nginx.conf`：
+
+```bash
+curl -b nginx-cookie.txt -X POST \
   http://NAS-IP:8000/app/api/nginx/reload
 ```
 
-配置校验失败时不会执行 reload。未设置令牌时，reload API 会返回 `401`。
+TOTP 允许前后各 10 分钟的时间偏差。验证码无效时认证接口返回 `401`；Cookie 无效或超过 1 天时 reload API 返回 `401`。配置校验失败时不会执行 reload。
+
+Nginx 会通过内部 `auth_request` 校验 Cookie，并保护以下路径：
+
+```text
+/vscode
+/vscode/
+/app/auth/*
+```
+
+访问这些路径前必须先调用 `/app/api/nginx/auth` 完成 TOTP 验证。`/app/api/nginx/auth`、`/app/api/nginx/status` 和普通 `/app/*` 路径不受该入口验证限制。
 
 ## 构建镜像
 
@@ -146,21 +165,14 @@ IMAGE=all-in-one-devcoding:latest bash tests/container-smoke.sh
 2. 在 Container Manager 中创建容器，或通过 SSH 执行下面的 Docker 命令。
 3. 只配置端口映射 `8000:8000` 和目录映射 `/volume1/docker/devcoding:/config`，不要映射 MongoDB 的 `27017`。
 
-如需启用 Nginx 配置管理 API，在容器环境变量中设置一个随机长令牌：
-
-```text
-NGINX_ADMIN_TOKEN=替换为随机长令牌
-```
-
 将 `/volume1/docker/devcoding` 替换为实际的 Synology 目录：
-
-如果需要启用 Nginx 管理 API，将下面命令中的 `NGINX_ADMIN_TOKEN` 行取消注释并替换为随机长令牌。
 
 ```bash
 docker run -d \
   --name devcoding \
   --restart unless-stopped \
   -e TZ=Asia/Shanghai \
+  -e NGINX_TOTP_SECRET=替换为本地生成的Base32密钥 \
   -p 8000:8000 \
   -v /volume1/docker/devcoding:/config \
   all-in-one-devcoding:latest
@@ -194,7 +206,7 @@ http://NAS-IP:8000/app/
 
 - code-server 不启用内置密码认证。只能在可信内网中直接访问；公网访问必须经过 DSM 反向代理、HTTPS 和身份认证。
 - 不要添加 `27017:27017` 端口映射。MongoDB 已限制监听容器内的 `127.0.0.1`。
-- `NGINX_ADMIN_TOKEN` 仅用于 `/app/api/nginx/reload`，不要提交到 Git 或写入镜像。
+- `NGINX_TOTP_SECRET` 同时用于 TOTP 和 Cookie 签名。不要公开、提交到 Git 或写入镜像；如怀疑泄露，更换环境变量并重启应用，然后重新绑定验证器。生产环境应通过 HTTPS 使用认证 Cookie。
 
 MongoDB 会由 s6 自动启动，使用 `/config/mongo_data` 保存数据，并只监听容器内部的 `127.0.0.1:27017`。
 PM2 会由 s6 自动启动，并从 `/config/.pm2/dump.pm2` 恢复已保存的应用。

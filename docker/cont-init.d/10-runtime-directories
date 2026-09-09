@@ -18,6 +18,10 @@ if [ ! -f /config/app/server.js ]; then
     cp /opt/default-node-app.js /config/app/server.js
 fi
 
+if [ ! -f /config/app/totp.js ]; then
+    cp /opt/default-totp.js /config/app/totp.js
+fi
+
 if [ ! -f /config/app/package.json ]; then
     cp /opt/default-express-package.json /config/app/package.json
 fi

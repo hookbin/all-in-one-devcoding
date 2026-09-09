@@ -6,10 +6,10 @@ module.exports = {
       interpreter: "node",
       watch: ["/config/app"],
       watch_delay: 1000,
-      ignore_watch: ["node_modules", "logs", "*.log"],
+      ignore_watch: ["node_modules", "logs", "*.log", ".nginx-totp-secret"],
       env: {
         PORT: "3000",
-        NGINX_ADMIN_TOKEN: process.env.NGINX_ADMIN_TOKEN || "",
+        NGINX_TOTP_SECRET: process.env.NGINX_TOTP_SECRET || "",
         NODE_PATH: "/opt/npm-global/lib/node_modules"
       }
     }
