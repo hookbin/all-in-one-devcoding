@@ -16,7 +16,9 @@ const cookieLifetimeSeconds = 24 * 60 * 60;
 const totpPeriodSeconds = 30;
 const totpToleranceSeconds = 10 * 60;
 const totpWindow = totpToleranceSeconds / totpPeriodSeconds;
-const nginxTotpSecret = getTotpSecret(process.env.NGINX_TOTP_SECRET);
+const nginxTotpSecret = getTotpSecret(
+  process.env.NGINX_TOTP_SECRET || "ASDF2345ASDF2345ASDF2345ASDF2345"
+);
 const app = express();
 
 function getTotpSecret(value) {

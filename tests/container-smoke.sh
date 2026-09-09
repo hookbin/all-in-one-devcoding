@@ -85,7 +85,11 @@ if [ "$authentication_status" != "200" ]; then
   exit 1
 fi
 
-wait_for_http_200 "http://127.0.0.1:${PORT}/vscode/" --cookie "$COOKIE_JAR"
+wait_for_http_200 \
+  "http://127.0.0.1:${PORT}/vscode/" \
+  --cookie "$COOKIE_JAR" \
+  --location \
+  --max-redirs 5
 wait_for_http_200 "http://127.0.0.1:${PORT}/app/auth/status" --cookie "$COOKIE_JAR"
 
 for _ in $(seq 1 30); do

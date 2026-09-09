@@ -97,7 +97,7 @@ Nginx 配置管理 API 使用 TOTP 动态验证码和签名 Cookie。先在本�
 node -e "console.log(require('./docker/app/totp').generateSecret())"
 ```
 
-将输出保存到系统环境变量 `NGINX_TOTP_SECRET`，不要写入镜像或提交到 Git。同时把同一个密钥添加到支持 TOTP 的验证器；参数为 SHA-1、6 位、30 秒。
+镜像提供公开的测试默认值 `ASDF2345ASDF2345ASDF2345ASDF2345`。生产环境必须将本地生成的输出保存到系统环境变量 `NGINX_TOTP_SECRET` 以覆盖默认值，不要将生产密钥写入镜像或提交到 Git。同时把同一个密钥添加到支持 TOTP 的验证器；参数为 SHA-1、6 位、30 秒。
 
 查询状态：
 

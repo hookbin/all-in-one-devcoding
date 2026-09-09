@@ -9,7 +9,9 @@ module.exports = {
       ignore_watch: ["node_modules", "logs", "*.log", ".nginx-totp-secret"],
       env: {
         PORT: "3000",
-        NGINX_TOTP_SECRET: process.env.NGINX_TOTP_SECRET || "",
+        NGINX_TOTP_SECRET:
+          process.env.NGINX_TOTP_SECRET ||
+          "ASDF2345ASDF2345ASDF2345ASDF2345",
         NODE_PATH: "/opt/npm-global/lib/node_modules"
       }
     }
