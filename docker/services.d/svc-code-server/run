@@ -2,10 +2,9 @@
 set -e
 
 mkdir -p /config/logs/code-server
-chown abc:abc /config/logs/code-server
+chown root:root /config/logs/code-server
 
-exec s6-setuidgid abc \
-    /app/code-server/lib/node /app/code-server \
+exec /app/code-server/lib/node /app/code-server \
     --bind-addr "[::]:8443" \
     --user-data-dir /config/data \
     --extensions-dir /config/extensions \

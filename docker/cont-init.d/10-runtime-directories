@@ -43,7 +43,13 @@ if [ ! -f /config/nginx/nginx.conf ]; then
     cp /opt/default-nginx.conf /config/nginx/nginx.conf
 fi
 
-chown -R abc:abc \
+if grep -Eq '^[[:space:]]*user[[:space:]]+[^;]+;' /config/nginx/nginx.conf; then
+    sed -Ei 's/^[[:space:]]*user[[:space:]]+[^;]+;/user root;/' /config/nginx/nginx.conf
+else
+    sed -i '1i user root;' /config/nginx/nginx.conf
+fi
+
+chown -R root:root \
     /config/app \
     /config/www \
     /config/mongo_data \
