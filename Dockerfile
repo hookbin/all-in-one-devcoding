@@ -23,7 +23,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NPM_CONFIG_PREFIX=/opt/npm-global \
     PATH=/opt/npm-global/bin:$PATH \
     NODE_PATH=/opt/npm-global/lib/node_modules \
-    PM2_HOME=/config/.pm2
+    PM2_HOME=/config/.pm2 \
+    SUDO_PASSWORD=0000
 
 # ============================================================
 # System Packages
