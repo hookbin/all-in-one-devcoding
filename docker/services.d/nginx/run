@@ -3,6 +3,6 @@ set -e
 
 mkdir -p /config/logs/nginx
 touch /config/logs/nginx/nginx.pid
-chown root:root /config/logs/nginx/nginx.pid
+chown abc:abc /config/logs/nginx/nginx.pid
 
-exec nginx -c /config/nginx/nginx.conf -g "daemon off;"
+exec s6-setuidgid abc nginx -c /config/nginx/nginx.conf -g "daemon off;"

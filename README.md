@@ -51,7 +51,7 @@ MongoDB 只应监听容器内部的 `127.0.0.1:27017`，不要映射 `27017` 到
 /config/nginx/nginx.conf
 ```
 
-默认配置不会覆盖已经存在的文件。容器启动时会把该文件的顶层 `user` 指令统一设置为 `root`；如果没有此指令，则自动在文件开头添加。以后直接编辑 Synology 映射目录中的 `nginx/nginx.conf`，然后重启容器即可生效。
+默认配置不会覆盖已经存在的文件。以后直接编辑 Synology 映射目录中的 `nginx/nginx.conf`，然后重启容器即可生效。
 
 Nginx 配置模板位于镜像内：
 
@@ -63,12 +63,23 @@ Nginx 配置模板位于镜像内：
 
 ## 权限和环境变量
 
-容器中的 code-server、Nginx、MongoDB、PM2 和 logrotate 均以 `root` 身份运行，`/config` 目录由 `root:root` 拥有。Synology 上的 `/config` 映射目录必须允许容器内 UID/GID `0:0` 读写。
+容器内 `/config` 目录固定由 `abc:abc` 用户和用户组拥有：
 
-如果 Synology 使用 SSH 设置目录权限，可执行：
+```text
+abc:abc
+```
+
+Synology 上的 `/config` 映射目录必须允许容器内的 `abc` 用户读写。
+容器内 `abc` 的实际 UID/GID 以以下命令输出为准：
 
 ```bash
-sudo chown -R 0:0 /volume1/docker/devcoding
+sudo docker exec devcoding id abc
+```
+
+如果 Synology 使用 SSH 设置目录权限，应使用上述输出中的数字 UID/GID：
+
+```bash
+sudo chown -R UID:GID /volume1/docker/devcoding
 ```
 
 `TZ` 默认设置为 `Asia/Shanghai`，权限不通过 `PUID`、`PGID` 配置。
@@ -169,10 +180,11 @@ docker run -d \
 
 容器启动时，LinuxServer 的 s6 会自动启动 Nginx 服务，使用 `/config/nginx/nginx.conf`，监听容器内的 `8000` 端口。容器重启或 Nginx 进程退出后，s6 会负责重新拉起服务。
 
-首次启动后，容器会在 `/config` 下创建应用、网站、MongoDB 数据、日志和 PM2 数据目录。所有服务均以 root 身份运行；如需修正 NAS 目录权限，可执行：
+首次启动后，容器会在 `/config` 下创建应用、网站、MongoDB 数据、日志和 PM2 数据目录。用以下命令确认容器内用户 UID/GID，再按实际数字修正 NAS 目录权限：
 
 ```bash
-sudo chown -R 0:0 /volume1/docker/devcoding
+docker exec devcoding id abc
+chown -R UID:GID /volume1/docker/devcoding
 ```
 
 验证部署：
@@ -192,7 +204,6 @@ http://NAS-IP:8000/app/
 
 ### 安全注意事项
 
-- code-server、Nginx、MongoDB、PM2 和 logrotate 均以容器 root 身份运行。任何服务漏洞或 Code Server 终端访问都会获得容器内最高权限；不要启用特权模式、挂载 Docker socket 或映射不必要的宿主机目录。
 - code-server 不启用内置密码认证。只能在可信内网中直接访问；公网访问必须经过 DSM 反向代理、HTTPS 和身份认证。
 - 不要添加 `27017:27017` 端口映射。MongoDB 已限制监听容器内的 `127.0.0.1`。
 - `NGINX_TOTP_SECRET` 同时用于 TOTP 和 Cookie 签名。不要公开、提交到 Git 或写入镜像；如怀疑泄露，更换环境变量并重启应用，然后重新绑定验证器。生产环境应通过 HTTPS 使用认证 Cookie。

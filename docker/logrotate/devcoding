@@ -10,5 +10,5 @@
     compress
     delaycompress
     copytruncate
-    su root root
+    su abc abc
 }

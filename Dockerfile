@@ -100,7 +100,7 @@ RUN mkdir -p \
         /config/logs/nginx \
         /config/nginx \
         /config/.pm2 && \
-    chown -R root:root /config
+    chown -R abc:abc /config
 
 # ============================================================
 # Default Nginx Configuration
